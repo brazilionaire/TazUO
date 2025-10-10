@@ -50,12 +50,12 @@ public static class LongDistancePathfinderSimple
 
         Direction dir = DirectionHelper.CalculateDirection(player.X, player.Y, _destX, _destY);
 
-        for (int i = DEFAULT_PATHFIND_LENGTH; i > 0; i--)
+        for (int i = Math.Min(dist, DEFAULT_PATHFIND_LENGTH); i > 0; i--)
         {
             Log.Info($"Long distance trying at {i} distance.");
             GetPositionAtDistance(player.X, player.Y, dir, i, out int targetX, out int targetY);
             World.Instance.Map.GetMapZ(targetX, targetY, out var g, out var s);
-            if (player.Pathfinder.WalkTo(targetX, targetY, Math.Max(g, s), 0))
+            if (player.Pathfinder.WalkTo(targetX, targetY, g, 0))
                 break;
         }
 
