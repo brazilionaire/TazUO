@@ -255,13 +255,13 @@ class PyEntity:
 
 class PyGameObject:
     Impassible: bool = None
+    Graphic: int = None
     Hue: int = None
     Distance: int = None
     __class__: str = None
     X: int = None
     Y: int = None
     Z: int = None
-    Graphic: int = None
 
     def SetHue(self, hue: int) -> None:
         """

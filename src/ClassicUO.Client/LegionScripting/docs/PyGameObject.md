@@ -16,6 +16,13 @@ description:  Base class for all Python-accessible game world objects.   Encapsu
  Check if the object is impassible or not based on item data.
 
 
+### `Graphic`
+
+**Type:** `ushort`
+
+ The graphic ID of the object, representing its visual appearance.
+
+
 ### `Hue`
 
 **Type:** `ushort`
@@ -55,13 +62,6 @@ description:  Base class for all Python-accessible game world objects.   Encapsu
 **Type:** `sbyte`
 
  The Z-coordinate (elevation) of the object in the game world.
-
-
-### `Graphic`
-
-**Type:** `ushort`
-
- The graphic ID of the object, representing its visual appearance.
 
 
 

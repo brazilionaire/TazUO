@@ -21,6 +21,14 @@ namespace ClassicUO.Game.Managers
         public void Add(uint serial, House revision)
         {
             _houses[serial] = revision;
+
+            for (int x = revision.Bounds.X; x < revision.Bounds.X + revision.Bounds.Width; x++)
+            {
+                for (int y = revision.Bounds.Y; y < revision.Bounds.Y + revision.Bounds.Height; y++)
+                {
+                    WalkableManager.Instance.SetSessionWalkable(x, y, false);
+                }
+            }
         }
 
         public bool TryGetHouse(uint serial, out House house)
