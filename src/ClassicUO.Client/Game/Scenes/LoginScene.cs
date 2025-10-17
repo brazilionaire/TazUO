@@ -40,33 +40,52 @@ namespace ClassicUO.Game.Scenes
     public sealed class LoginScene : Scene
     {
         public static LoginScene Instance { get; private set; }
-        
+
         private Gump _currentGump;
         private LoginSteps _lastLoginStep;
         private uint _pingTime;
-        private long _reconnectTime;
-        private int _reconnectTryCounter = 1;
         private bool _autoLogin;
         private readonly World _world;
+        private readonly LoginHandshake _handshake;
 
         public LoginScene(World world)
         {
             Instance?.Dispose();
             _world = world;
             Instance = this;
+            _handshake = new LoginHandshake();
+            _handshake.LoginStepChanged += OnLoginStepChanged;
         }
 
-        public bool Reconnect { get; set; }
-        public LoginSteps CurrentLoginStep { get; set; } = LoginSteps.Main;
-        public ServerListEntry[] Servers { get; private set; }
-        public CityInfo[] Cities { get; set; }
-        public string[] Characters { get; private set; }
-        public string PopupMessage { get; set; }
-        public byte ServerIndex { get; private set; }
+        public bool Reconnect
+        {
+            get => _handshake.Reconnect;
+            set => _handshake.Reconnect = value;
+        }
+
+        public LoginSteps CurrentLoginStep
+        {
+            get => _handshake.CurrentLoginStep;
+            set => _handshake.CurrentLoginStep = value;
+        }
+
+        public ServerListEntry[] Servers => _handshake.Servers;
+        public CityInfo[] Cities
+        {
+            get => _handshake.Cities;
+            set => _handshake.Cities = value;
+        }
+        public string[] Characters => _handshake.Characters;
+        public string PopupMessage
+        {
+            get => _handshake.PopupMessage;
+            set => _handshake.PopupMessage = value;
+        }
+        public byte ServerIndex => _handshake.ServerIndex;
         public static string Account { get; internal set; }
-        public string Password { get; private set; }
+        public string Password => _handshake.Password;
         public bool CanAutologin => _autoLogin || Reconnect;
-        public (int min, int max) LoginDelay { get; private set; }
+        public (int min, int max) LoginDelay => _handshake.LoginDelay;
 
 
         public override void Load()
@@ -153,19 +172,13 @@ namespace ClassicUO.Game.Scenes
 
             _currentGump?.Dispose();
 
-            // UnRegistering Packet Events
-            AsyncNetClient.Socket.Connected -= OnNetClientConnected;
-            AsyncNetClient.Socket.Disconnected -= OnNetClientDisconnected;
-
             Client.Game.UO.GameCursor.IsLoading = false;
             base.Unload();
         }
 
-        public override void Update()
+        private void OnLoginStepChanged(object sender, LoginSteps newStep)
         {
-            base.Update();
-
-            if (_lastLoginStep != CurrentLoginStep)
+            if (_lastLoginStep != newStep)
             {
                 Client.Game.UO.GameCursor.IsLoading = false;
 
@@ -174,33 +187,15 @@ namespace ClassicUO.Game.Scenes
                 UIManager.Add(_currentGump = GetGumpForStep());
                 g?.Dispose();
 
-                _lastLoginStep = CurrentLoginStep;
+                _lastLoginStep = newStep;
             }
+        }
 
-            if (Reconnect && (CurrentLoginStep == LoginSteps.PopUpMessage || CurrentLoginStep == LoginSteps.Main) && !AsyncNetClient.Socket.IsConnected)
-            {
-                if (_reconnectTime < Time.Ticks)
-                {
-                    if (!string.IsNullOrEmpty(Account))
-                    {
-                        Connect(Account, Crypter.Decrypt(Settings.GlobalSettings.Password));
-                    }
-                    else if (!string.IsNullOrEmpty(Settings.GlobalSettings.Username))
-                    {
-                        Connect(Settings.GlobalSettings.Username, Crypter.Decrypt(Settings.GlobalSettings.Password));
-                    }
+        public override void Update()
+        {
+            base.Update();
 
-                    int timeT = Settings.GlobalSettings.ReconnectTime * 1000;
-
-                    if (timeT < 1000)
-                    {
-                        timeT = 1000;
-                    }
-
-                    _reconnectTime = (long)Time.Ticks + timeT;
-                    _reconnectTryCounter++;
-                }
-            }
+            _handshake.HandleReconnect();
 
             if ((CurrentLoginStep == LoginSteps.CharacterCreation || CurrentLoginStep == LoginSteps.CharacterSelection) && Time.Ticks > _pingTime)
             {
@@ -325,112 +320,28 @@ namespace ClassicUO.Game.Scenes
 
         public void Connect(string account, string password)
         {
-            if (CurrentLoginStep == LoginSteps.Connecting)
-            {
-                return;
-            }
-
             Account = account;
-            Password = password;
-
-            // Save credentials to config file
-            if (Settings.GlobalSettings.SaveAccount)
-            {
-                Settings.GlobalSettings.Username = Account;
-                Settings.GlobalSettings.Password = Crypter.Encrypt(Password);
-                try
-                {
-                    Settings.GlobalSettings.Save();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.ToString());
-                }
-            }
-
-            Log.Trace($"Start login to: {Settings.GlobalSettings.IP},{Settings.GlobalSettings.Port}");
-
-
-            if (!Reconnect)
-            {
-                CurrentLoginStep = LoginSteps.Connecting;
-            }
-
-            //NetClient.LoginSocket.Disconnected += (o, e) => {
-            //    PopupMessage = ResGeneral.CheckYourConnectionAndTryAgain;
-            //    CurrentLoginStep = LoginSteps.PopUpMessage;
-            //    Log.Error("No Internet Access");
-            //};
-
-            AsyncNetClient.Socket.Connected -= OnNetClientConnected;
-            AsyncNetClient.Socket.Disconnected -= OnNetClientDisconnected;
-            AsyncNetClient.Socket?.Disconnect();
-            AsyncNetClient.Socket = new AsyncNetClient();
-            AsyncNetClient.Socket.Connected += OnNetClientConnected;
-            AsyncNetClient.Socket.Disconnected += OnNetClientDisconnected;
-            var status = AsyncNetClient.Socket.Connect(Settings.GlobalSettings.IP, Settings.GlobalSettings.Port);
+            _handshake.Connect(account, password);
         }
-
-
 
         public int GetServerIndexByName(string name)
         {
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                for (int i = 0; i < Servers.Length; i++)
-                {
-                    if (Servers[i].Name.Equals(name, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        return i;
-                    }
-                }
-            }
-
-            return -1;
+            return _handshake.GetServerIndexByName(name);
         }
 
         public int GetServerIndexFromSettings()
         {
-            string name = Settings.GlobalSettings.LastServerName;
-            int index = GetServerIndexByName(name);
-
-            if (index == -1)
-            {
-                index = Settings.GlobalSettings.LastServerNum;
-            }
-
-            if (index < 0 || index >= Servers.Length)
-            {
-                index = 0;
-            }
-
-            return index;
+            return _handshake.GetServerIndexFromSettings();
         }
 
         public void SelectServer(byte index)
         {
-            if (CurrentLoginStep == LoginSteps.ServerSelection)
+            if (Servers != null && Servers.Length > 0)
             {
-                for (byte i = 0; i < Servers.Length; i++)
-                {
-                    if (Servers[i].Index == index)
-                    {
-                        ServerIndex = i;
-
-                        break;
-                    }
-                }
-
-                Settings.GlobalSettings.LastServerNum = (ushort)(1 + ServerIndex);
-                Settings.GlobalSettings.LastServerName = Servers[ServerIndex].Name;
-                Settings.GlobalSettings.Save();
-
-                CurrentLoginStep = LoginSteps.LoginInToServer;
-
                 _world.ServerName = Servers[ServerIndex].Name;
-
-                AsyncNetClient.Socket.Send_SelectServer(index);
             }
+
+            _handshake.SelectServer(index, _world.ServerName);
         }
 
         public void SelectCharacter(uint index)
@@ -498,31 +409,29 @@ namespace ClassicUO.Game.Scenes
                 case LoginSteps.Connecting:
                 case LoginSteps.VerifyingAccount:
                 case LoginSteps.ServerSelection:
-                    DisposeAllServerEntries();
-                    CurrentLoginStep = LoginSteps.Main;
-                    AsyncNetClient.Socket.Disconnect();
+                    _handshake.Disconnect();
+                    _handshake.SetLoginStep(LoginSteps.Main);
+                    //CurrentLoginStep = LoginSteps.Main;
 
                     break;
 
                 case LoginSteps.LoginInToServer:
-                    AsyncNetClient.Socket.Disconnect();
-                    Characters = null;
-                    DisposeAllServerEntries();
+                    _handshake.Disconnect();
                     Connect(Account, Password);
 
                     break;
 
                 case LoginSteps.CharacterCreation:
-                    CurrentLoginStep = LoginSteps.CharacterSelection;
+                    //CurrentLoginStep = LoginSteps.CharacterSelection;
+                    _handshake.SetLoginStep(LoginSteps.CharacterSelection);
 
                     break;
 
                 case LoginSteps.PopUpMessage:
                 case LoginSteps.CharacterSelection:
-                    AsyncNetClient.Socket.Disconnect();
-                    Characters = null;
-                    DisposeAllServerEntries();
-                    CurrentLoginStep = LoginSteps.Main;
+                    _handshake.Disconnect();
+                    //CurrentLoginStep = LoginSteps.Main;
+                    _handshake.SetLoginStep(LoginSteps.Main);
 
                     break;
             }
@@ -530,110 +439,25 @@ namespace ClassicUO.Game.Scenes
 
         public CityInfo GetCity(int index)
         {
-            if (index < Cities.Length)
-            {
-                return Cities[index];
-            }
-
-            return null;
+            return _handshake.GetCity(index);
         }
 
-        private void OnNetClientConnected(object sender, EventArgs e)
-        {
-            Log.Info("Connected!");
-            CurrentLoginStep = LoginSteps.VerifyingAccount;
-
-            uint address = AsyncNetClient.Socket.LocalIP;
-
-            AsyncNetClient.Encryption?.Initialize(true, address);
-
-            if (Client.Game.UO.Version >= ClientVersion.CV_6040)
-            {
-                uint clientVersion = (uint) Client.Game.UO.Version;
-
-                byte major = (byte)(clientVersion >> 24);
-                byte minor = (byte)(clientVersion >> 16);
-                byte build = (byte)(clientVersion >> 8);
-                byte extra = (byte)clientVersion;
-
-
-                AsyncNetClient.Socket.Send_Seed(address, major, minor, build, extra);
-            }
-            else
-            {
-                AsyncNetClient.Socket.Send_Seed_Old(address);
-            }
-
-            AsyncNetClient.Socket.Send_FirstLogin(Account, Password);
-        }
-
-        private void OnNetClientDisconnected(object sender, SocketError e)
-        {
-            Log.Warn("Disconnected");
-
-            if (CurrentLoginStep == LoginSteps.CharacterCreation)
-            {
-                return;
-            }
-
-            if (e == SocketError.Success)
-            {
-                return;
-            }
-
-            Characters = null;
-            DisposeAllServerEntries();
-
-            if (Settings.GlobalSettings.Reconnect)
-            {
-                Reconnect = true;
-
-                PopupMessage = string.Format(ResGeneral.ReconnectPleaseWait01, _reconnectTryCounter, StringHelper.AddSpaceBeforeCapital(e.ToString()));
-
-                UIManager.GetGump<LoadingGump>()?.SetText(PopupMessage);
-            }
-            else
-            {
-                PopupMessage = string.Format(ResGeneral.ConnectionLost0, StringHelper.AddSpaceBeforeCapital(e.ToString()));
-            }
-
-            CurrentLoginStep = LoginSteps.PopUpMessage;
-        }
 
         public void ServerListReceived(ref StackDataReader p)
         {
-            byte flags = p.ReadUInt8();
-            ushort count = p.ReadUInt16BE();
-            DisposeAllServerEntries();
-            Servers = new ServerListEntry[count];
+            _handshake.ServerListReceived(ref p);
 
-            for (ushort i = 0; i < count; i++)
+            if (CanAutologin && Servers != null && Servers.Length != 0)
             {
-                Servers[i] = ServerListEntry.Create(ref p);
-            }
-
-            CurrentLoginStep = LoginSteps.ServerSelection;
-
-            if (CanAutologin)
-            {
-                if (Servers.Length != 0)
-                {
-                    int index = GetServerIndexFromSettings();
-
-                    SelectServer((byte)Servers[index].Index);
-                }
+                int index = GetServerIndexFromSettings();
+                SelectServer((byte)Servers[index].Index);
             }
         }
 
         public void UpdateCharacterList(ref StackDataReader p)
         {
-            ParseCharacterList(ref p);
+            _handshake.UpdateCharacterList(ref p);
 
-            if (CurrentLoginStep != LoginSteps.PopUpMessage)
-            {
-                PopupMessage = null;
-            }
-            CurrentLoginStep = LoginSteps.CharacterSelection;
             UIManager.GetGump<CharacterSelectionGump>()?.Dispose();
 
             _currentGump?.Dispose();
@@ -642,7 +466,7 @@ namespace ClassicUO.Game.Scenes
             if (!string.IsNullOrWhiteSpace(PopupMessage))
             {
                 Gump g = null;
-                g = new LoadingGump(_world,PopupMessage, LoginButtons.OK, (but) => g.Dispose()) { IsModal = true };
+                g = new LoadingGump(_world, PopupMessage, LoginButtons.OK, (but) => g.Dispose()) { IsModal = true };
                 UIManager.Add(g);
                 PopupMessage = null;
             }
@@ -650,14 +474,10 @@ namespace ClassicUO.Game.Scenes
 
         public void ReceiveCharacterList(ref StackDataReader p)
         {
-            ParseCharacterList(ref p);
-            ParseCities(ref p);
-
-            _world.ClientFeatures.SetFlags((CharacterListFlags) p.ReadUInt32BE());
-            CurrentLoginStep = LoginSteps.CharacterSelection;
+            _handshake.ReceiveCharacterList(ref p, 0);
+            _world.ClientFeatures.SetFlags((CharacterListFlags)p.ReadUInt32BE());
 
             uint charToSelect = 0;
-
             bool haveAnyCharacter = false;
             bool canLogin = CanAutologin;
 
@@ -668,17 +488,19 @@ namespace ClassicUO.Game.Scenes
 
             string lastCharName = LastCharacterManager.GetLastCharacter(Account, _world.ServerName);
 
-            for (byte i = 0; i < Characters.Length; i++)
+            if (Characters != null)
             {
-                if (Characters[i].Length > 0)
+                for (byte i = 0; i < Characters.Length; i++)
                 {
-                    haveAnyCharacter = true;
-
-                    if (Characters[i] == lastCharName)
+                    if (Characters[i].Length > 0)
                     {
-                        charToSelect = i;
+                        haveAnyCharacter = true;
 
-                        break;
+                        if (Characters[i] == lastCharName)
+                        {
+                            charToSelect = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -695,291 +517,23 @@ namespace ClassicUO.Game.Scenes
 
         public void HandleErrorCode(ref StackDataReader p)
         {
-            byte code = p.ReadUInt8();
-
-            PopupMessage = ServerErrorMessages.GetError(p[0], code, LoginDelay);
-            CurrentLoginStep = LoginSteps.PopUpMessage;
-            LoginDelay = default;
+            _handshake.HandleErrorCode(ref p);
         }
 
         public void HandleLoginDelayPacket(ref StackDataReader p)
         {
-            var delay = p.ReadUInt8();
-            LoginDelay = ((delay - 1) * 10, delay * 10);
+            _handshake.HandleLoginDelayPacket(ref p);
         }
 
         public void HandleRelayServerPacket(ref StackDataReader p)
         {
-            long ip = p.ReadUInt32LE(); // use LittleEndian here
-            ushort port = p.ReadUInt16BE();
-            uint seed = p.ReadUInt32BE();
-            
-            if (Settings.GlobalSettings.IgnoreRelayIp || ip == 0)
-            {
-                Log.Trace("Ignoring relay server packet IP address");
-                ip = long.Parse(Settings.GlobalSettings.IP);
-                port = Settings.GlobalSettings.Port;
-            }
-            
-            AfterRelayConnect(ip, port, seed);
-        }
-
-        private ushort retries = 0;
-        private void AfterRelayConnect(long ip, ushort port, uint seed)
-        {
-            AsyncNetClient.Socket.Connected -= OnNetClientConnected;
-            AsyncNetClient.Socket.Disconnect().Wait();
-            AsyncNetClient.Socket = new AsyncNetClient();
-
-            retries++;
-            AsyncNetClient.Socket.Connect(new IPAddress(ip).ToString(), port).Wait(3000);
-
-            if (AsyncNetClient.Socket.IsConnected)
-            {
-                EncryptionHelper.Instance?.Initialize(false, seed);
-                AsyncNetClient.Socket.EnableCompression();
-                unsafe
-                {
-                    Span<byte> b = stackalloc byte[4] { (byte)(seed >> 24), (byte)(seed >> 16), (byte)(seed >> 8), (byte)seed };
-                    AsyncNetClient.Socket.Send(b, true, true);
-                }
-
-                AsyncNetClient.Socket.Send_SecondLogin(Account, Password, seed);
-            }
-            else
-            {
-                if(retries > 5)
-                {
-                    retries = 0;
-                    StepBack();
-                    return;
-                }
-                
-                AfterRelayConnect(ip, port, seed);
-            }
-        }
-
-        private void ParseCharacterList(ref StackDataReader p)
-        {
-            int count = p.ReadUInt8();
-            Characters = new string[count];
-
-            for (ushort i = 0; i < count; i++)
-            {
-                Characters[i] = p.ReadASCII(30).TrimEnd('\0');
-
-                p.Skip(30);
-            }
-        }
-
-        private void ParseCities(ref StackDataReader p)
-        {
-            byte count = p.ReadUInt8();
-            Cities = new CityInfo[count];
-
-            bool isNew = Client.Game.UO.Version >= ClientVersion.CV_70130;
-            string[] descriptions = null;
-
-            if (!isNew)
-            {
-                descriptions = ReadCityTextFile(count);
-            }
-
-            Point[] oldtowns =
-            {
-                new Point(105, 130), new Point(245, 90),
-                new Point(165, 200), new Point(395, 160),
-                new Point(200, 305), new Point(335, 250),
-                new Point(160, 395), new Point(100, 250),
-                new Point(270, 130), new Point(0xFFFF, 0xFFFF)
-            };
-
-            for (int i = 0; i < count; i++)
-            {
-                CityInfo cityInfo;
-
-                if (isNew)
-                {
-                    byte cityIndex = p.ReadUInt8();
-                    string cityName = p.ReadASCII(32);
-                    string cityBuilding = p.ReadASCII(32);
-                    ushort cityX = (ushort)p.ReadUInt32BE();
-                    ushort cityY = (ushort)p.ReadUInt32BE();
-                    sbyte cityZ = (sbyte)p.ReadUInt32BE();
-                    uint cityMapIndex = p.ReadUInt32BE();
-                    uint cityDescription = p.ReadUInt32BE();
-                    p.Skip(4);
-
-                    cityInfo = new CityInfo
-                    (
-                        cityIndex,
-                        cityName,
-                        cityBuilding,
-                        Client.Game.UO.FileManager.Clilocs.GetString((int) cityDescription),
-                        cityX,
-                        cityY,
-                        cityZ,
-                        cityMapIndex,
-                        isNew
-                    );
-                }
-                else
-                {
-                    byte cityIndex = p.ReadUInt8();
-                    string cityName = p.ReadASCII(31);
-                    string cityBuilding = p.ReadASCII(31);
-
-                    cityInfo = new CityInfo
-                    (
-                        cityIndex,
-                        cityName,
-                        cityBuilding,
-                        descriptions != null ? descriptions[i] : string.Empty,
-                        (ushort)oldtowns[i % oldtowns.Length].X,
-                        (ushort)oldtowns[i % oldtowns.Length].Y,
-                        0,
-                        0,
-                        isNew
-                    );
-                }
-
-                Cities[i] = cityInfo;
-            }
-        }
-
-        private string[] ReadCityTextFile(int count)
-        {
-            string path = Client.Game.UO.FileManager.GetUOFilePath("citytext.enu");
-
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-
-            string[] descr = new string[count];
-
-            // TODO: stackalloc ?
-            byte[] data = new byte[4];
-
-            StringBuilder name = new StringBuilder();
-            StringBuilder text = new StringBuilder();
-
-            using (FileStream stream = File.OpenRead(path))
-            {
-                int cityIndex = 0;
-
-                while (stream.Position < stream.Length)
-                {
-                    int r = stream.Read(data, 0, 4);
-
-                    if (r == -1)
-                    {
-                        break;
-                    }
-
-                    string dataText = Encoding.UTF8.GetString(data, 0, 4);
-
-                    if (dataText == "END\0")
-                    {
-                        name.Clear();
-
-                        while (stream.Position < stream.Length)
-                        {
-                            char b = (char)stream.ReadByte();
-
-                            if (b == '<')
-                            {
-                                stream.Position -= 1;
-
-                                break;
-                            }
-
-                            name.Append(b);
-                        }
-
-                        text.Clear();
-
-                        while (stream.Position < stream.Length)
-                        {
-                            char b;
-
-                            while ((b = (char)stream.ReadByte()) != '\0')
-                            {
-                                text.Append(b);
-                            }
-
-                            if (text.Length != 0)
-                            {
-                                string t = text + "\n\n";
-                                text.Clear();
-
-                                text.Append(t);
-                            }
-
-                            long pos = stream.Position;
-                            byte end = (byte)stream.ReadByte();
-                            stream.Position = pos;
-
-                            if (end == 0x2E)
-                            {
-                                break;
-                            }
-
-                            int r1 = stream.Read(data, 0, 4);
-                            stream.Position = pos;
-
-                            if (r1 == -1)
-                            {
-                                break;
-                            }
-
-                            string dataText1 = Encoding.UTF8.GetString(data, 0, 4);
-
-                            if (dataText1 == "END\0")
-                            {
-                                break;
-                            }
-                        }
-
-                        if (descr.Length <= cityIndex)
-                        {
-                            break;
-                        }
-
-                        descr[cityIndex++] = text.ToString();
-                    }
-                    else
-                    {
-                        stream.Position -= 3;
-                    }
-                }
-            }
-
-            return descr;
-        }
-
-        private void DisposeAllServerEntries()
-        {
-            if (Servers != null)
-            {
-                for (int i = 0; i < Servers.Length; i++)
-                {
-                    if (Servers[i] != null)
-                    {
-                        Servers[i].Dispose();
-                        Servers[i] = null;
-                    }
-                }
-
-                Servers = null;
-            }
+            _handshake.HandleRelayServerPacket(ref p);
         }
 
         public override void Dispose()
         {
             base.Dispose();
-            AsyncNetClient.Socket.Disconnected -= OnNetClientDisconnected;
-            AsyncNetClient.Socket.Connected -= OnNetClientConnected;
+            _handshake?.Dispose();
         }
     }
 
