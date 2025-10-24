@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Numerics;
 using ClassicUO.IO;
@@ -200,14 +201,16 @@ namespace ClassicUO.Game.Scenes
             ushort port = p.ReadUInt16BE();
             uint seed = p.ReadUInt32BE();
 
+            string finalIP = new IPAddress(ip).ToString();
+
             if (ignoreRelay || ip == 0)
             {
                 Log.TraceDebug("Ignoring relay server packet IP address");
-                ip = long.Parse(IP);
+                finalIP = IP;
                 port = Port;
             }
 
-            AfterRelayConnect(ip, port, seed);
+            AfterRelayConnect(finalIP, port, seed);
         }
 
         public int GetServerIndexByName(string name)
@@ -309,7 +312,7 @@ namespace ClassicUO.Game.Scenes
             ConnectionFailed?.Invoke(this, e);
         }
 
-        private void AfterRelayConnect(long ip, ushort port, uint seed)
+        private void AfterRelayConnect(string ip, ushort port, uint seed)
         {
             AsyncNetClient.Socket.Connected -= OnNetClientConnected;
             AsyncNetClient.Socket.Disconnected -= OnNetClientDisconnected;
@@ -318,7 +321,7 @@ namespace ClassicUO.Game.Scenes
 
             _retries++;
             Log.TraceDebug($"[HandShake] Reconnecting to relay server...");
-            AsyncNetClient.Socket.Connect(new System.Net.IPAddress(ip).ToString(), port).Wait(3000);
+            AsyncNetClient.Socket.Connect(ip, port).Wait(3000);
 
             if (AsyncNetClient.Socket.IsConnected)
             {
