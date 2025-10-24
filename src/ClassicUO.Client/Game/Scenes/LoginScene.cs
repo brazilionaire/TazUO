@@ -206,7 +206,7 @@ namespace ClassicUO.Game.Scenes
         {
             base.Update();
 
-            _handshake.HandleReconnect(Settings.GlobalSettings.ReconnectTime);
+            _handshake.HandleReconnect(Settings.GlobalSettings.ReconnectTime * 1000);
 
             if ((CurrentLoginStep == LoginSteps.CharacterCreation || CurrentLoginStep == LoginSteps.CharacterSelection) && Time.Ticks > _pingTime)
             {

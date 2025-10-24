@@ -117,7 +117,7 @@ namespace ClassicUO.Game.Scenes
         /// <summary>
         /// Call in Update() of login scene
         /// </summary>
-        /// <param name="reconnectTime">In seconds</param>
+        /// <param name="reconnectTime">In ms</param>
         public void HandleReconnect(int reconnectTime)
         {
             if (Reconnect && (CurrentLoginStep == LoginSteps.PopUpMessage || CurrentLoginStep == LoginSteps.Main)
