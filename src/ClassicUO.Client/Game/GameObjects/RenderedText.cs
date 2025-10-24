@@ -170,6 +170,10 @@ namespace ClassicUO.Game
         )
         {
             RenderedText r = _pool.GetOne();
+
+            if (r == null)
+                r = new RenderedText();
+
             r.Hue = hue;
             r.Font = font;
             r.IsUnicode = isunicode;

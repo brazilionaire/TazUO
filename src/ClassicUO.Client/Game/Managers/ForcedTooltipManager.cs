@@ -5,20 +5,20 @@ namespace ClassicUO.Game.Managers
 {
     internal static class ForcedTooltipManager
     {
-        //This class is inteded to help generate tooltips for servers before tooltips existed.
+        //This class is intended to help generate tooltips for servers before tooltips existed.
 
-        private static Dictionary<uint, long> _requestedSingleClick = new Dictionary<uint, long>();
-        private static long DELAY = 500;
+        private static readonly Dictionary<uint, long> _requestedSingleClick = new();
+        private const long DELAY = 500;
         private const uint UPDATE_DELAY = 1500;
         public static void RequestName(World world, uint serial)
         {
             if (world.ClientFeatures.TooltipsEnabled) return;
 
-            if (_requestedSingleClick.ContainsKey(serial))
-                if (Time.Ticks < _requestedSingleClick[serial])
+            if (_requestedSingleClick.TryGetValue(serial, out long timeRequested))
+                if (Time.Ticks < timeRequested)
                     return;
 
-            if (world.OPL.TryGetRevision(serial, out var revision) && revision > Time.Ticks) return;
+            if (world.OPL.TryGetRevision(serial, out uint revision) && revision > Time.Ticks) return;
 
             _requestedSingleClick[serial] = Time.Ticks + DELAY;
             GameActions.SingleClick(world, serial);

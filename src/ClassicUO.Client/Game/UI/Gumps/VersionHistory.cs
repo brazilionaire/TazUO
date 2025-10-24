@@ -11,6 +11,49 @@ namespace ClassicUO.Game.UI.Gumps
         private static string[] updateTexts =
         {
             """
+            /c[white][4.12.0]/cd
+            # Misc
+            - Minor performance improvements to mobiles, land, and statics.
+            - Bandage agent will use last ping + 10ms wait before allowing a retry when bandage buff option is in use
+            - Added item name tooltip to autoloot graphic in assistant
+            - Change title bar progress bar to | characters
+            - Add grid container context menu to autoloot this container
+            - Save guild and party member names for world map cache
+            - Display Graphics and Container values in hexadecimal format in various areas
+            - Add player and mouse to hide hud options
+            - Add ClearHands and EquipHands macros
+            - Add move macro up/down buttons
+            - Added force managed zlib option
+            - Added per-item containers for auto loot agent
+            - Add per item destinations to organizer agent
+
+            # Legion Py
+            - Move some py class stuff to the base game object class to broaden accessibility
+            - Add Oragnizer() method
+            - Add ClientCommand() method
+            - RequestTarget now properly returns 0 if canceled
+            - Added GetGumpContents to py api
+
+            # Bugs
+            - Fix modern shop gump prices
+            - Fix hide hud functionality when all is selected
+            - API Crash fix when checking buffs
+            - Fix bandage manager queueing more heals then 1 at a time
+            - Ignore destroyed items in grid containers
+            - Some ImgUI display size checks
+            - Fix drag select while interacting with imgui
+            - Fix for rare server gump crashes
+            - Fix a few bugs in crash reports and browser launching
+            - Fix thread safety issue in TextFileParser causing gump crashes
+            - Fix for paperdoll gump scaling war mode button
+            - Add small delay after healing buff is removed to try bandaging
+            - Add catch for rare error while changing seasons
+            - Add a null guard for API.Pathfinding()
+            - Bug fix for OPL crash
+            - Rare crash with rendered text
+            """,
+
+            """
             /c[white][4.11.0]/cd
             # Misc
             - Autoloot now provides backups
@@ -403,21 +446,6 @@ namespace ClassicUO.Game.UI.Gumps
             "- Visable layers option added in Options->TazUO\n" +
             "- Added custom XML Gumps -> see wiki\n" +
             "- Added some controller support for movement and macros",
-            "/c[white][3.14.0]/cd\n" +
-            "- New options menu\n" +
-            "- Small null ref bug fix\n" +
-            "- No max width on item count text for smaller scaling\n" +
-            "- Auto loot shift-click will no long work if you have shift for context menu or split stacks.\n" +
-            "- Skill progress bars will save their position if you move them\n" +
-            "- Changed skill progress bars to a queue instead of all showing at once\n" +
-            "- Fix art png loading\n" +
-            "- Added /c[green]-paperdoll/cd command\n" +
-            "- Added an auto resync option under Options->TazUO->Misc\n" +
-            "- Alt + Click paperdoll preview in modern paperdoll to copy a screenshot of it\n" +
-            "- Added `both` option to auto close gumps range or dead\n" +
-            "- Added shift + double click to advanced shop gump to buy/sell all of that item\n" +
-            "- Added use one health bar for last attack option\n" +
-            "- Added `-optlink` command",
 
             "\n\n/c[white]For further history please visit our discord."
         };

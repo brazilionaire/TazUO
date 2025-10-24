@@ -25,6 +25,19 @@ public class PyMobile : PyEntity
     public bool IsHuman => GetMobile()?.IsHuman ?? false;
 
     /// <summary>
+    /// Get the mobile's Backpack item
+    /// </summary>
+    public PyItem Backpack
+    {
+        get
+        {
+            Item backpack = GetMobile()?.Backpack;
+
+            return backpack != null ? new PyItem(backpack) : null;
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PyMobile"/> class from a <see cref="Mobile"/>.
     /// </summary>
     /// <param name="mobile">The mobile to wrap.</param>

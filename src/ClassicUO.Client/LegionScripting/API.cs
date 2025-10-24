@@ -189,7 +189,7 @@ namespace ClassicUO.LegionScripting
             get
             {
                 if (backpack == null)
-                    backpack = MainThreadQueue.InvokeOnMainThread(() => World.Player.FindItemByLayer(Game.Data.Layer.Backpack));
+                    backpack = MainThreadQueue.InvokeOnMainThread(() => World.Player.Backpack);
 
                 return backpack;
             }
@@ -477,7 +477,7 @@ namespace ClassicUO.LegionScripting
 
                 if (i != null)
                 {
-                    var bp = World.Player.FindItemByLayer(Layer.Backpack);
+                    var bp = World.Player.Backpack;
                     MoveItemQueue.Instance.Enqueue(i, bp);
                     Found = i.Serial;
                     return new PyItem(i);
@@ -506,7 +506,7 @@ namespace ClassicUO.LegionScripting
 
                 if (i != null)
                 {
-                    var bp = World.Player.FindItemByLayer(Layer.Backpack);
+                    var bp = World.Player.Backpack;
                     MoveItemQueue.Instance.Enqueue(i, bp);
                     Found = i.Serial;
                     return new PyItem(i);
@@ -1120,9 +1120,14 @@ namespace ClassicUO.LegionScripting
         {
             Item i = World.Items.Get(serial);
 
-            Found = i != null ? i.Serial : 0;
+            if (i != null)
+            {
+                Found = i.Serial;
+                return new PyItem(i);
+            }
 
-            return new PyItem(i);
+            Found = 0;
+            return null;
         });
 
         /// <summary>
@@ -2225,7 +2230,11 @@ namespace ClassicUO.LegionScripting
             {
                 if (World.Player.HasGump && (World.Player.LastGumpID == ID || ID == uint.MaxValue))
                 {
-                    return World.Player.LastGumpID;
+                    if(UIManager.GetGumpServer(World.Player.LastGumpID) is { IsDisposed:false })
+                        return World.Player.LastGumpID;
+
+                    //Gump doesn't exist, let's reset this to false
+                    World.Player.HasGump = false;
                 }
 
                 return 0;
@@ -2274,6 +2283,78 @@ namespace ClassicUO.LegionScripting
                 UIManager.GetGumpServer(gump)?.Dispose();
             }
         );
+
+        /// <summary>
+        /// Configure how the next gump should be handled.
+        /// Example:
+        /// ```py
+        /// # Position gump at coordinates
+        /// API.ConfigNextGump(x=100, y=200)
+        ///
+        /// # Auto-close any gump
+        /// API.ConfigNextGump(autoClose=True)
+        ///
+        /// # Auto-respond to specific gump
+        /// API.ConfigNextGump(serial=0x12345678, autoRespond=True, autoRespondButton=1)
+        ///
+        /// # Clear configuration
+        /// API.ConfigNextGump()
+        ///
+        /// Note: This is only applied once. You cannot stack multiple configs. This is reset after successfully applied and only applies to server-sent gumps.
+        /// ```
+        /// </summary>
+        /// <param name="serial">Gump serial to match (0 = match any gump)</param>
+        /// <param name="x">X position</param>
+        /// <param name="y">Y position</param>
+        /// <param name="isVisible">Whether gump should be visible</param>
+        /// <param name="autoClose">Automatically close the gump</param>
+        /// <param name="autoRespond">Automatically respond to the gump</param>
+        /// <param name="autoRespondButton">Button ID to use for auto-response</param>
+        public void ConfigNextGump(
+            uint? serial = null,
+            int? x = null,
+            int? y = null,
+            bool? isVisible = null,
+            bool? autoClose = null,
+            bool? autoRespond = null,
+            int? autoRespondButton = null
+        ) => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            // If no parameters are set, reset/clear the configuration
+            if (serial == null && x == null && y == null && isVisible == null &&
+                autoClose == null && autoRespond == null && autoRespondButton == null)
+            {
+                NextGumpConfig.Reset();
+                return;
+            }
+
+            // Enable the configuration and apply provided parameters
+            NextGumpConfig.Enabled = true;
+
+            if (serial.HasValue)
+                NextGumpConfig.Serial = serial.Value;
+
+            if (x.HasValue)
+                NextGumpConfig.X = x.Value;
+
+            if (y.HasValue)
+                NextGumpConfig.Y = y.Value;
+
+            if (isVisible.HasValue)
+                NextGumpConfig.IsVisible = isVisible.Value;
+
+            if (autoClose.HasValue)
+                NextGumpConfig.AutoClose = autoClose.Value;
+
+            if (autoRespond.HasValue)
+                NextGumpConfig.AutoRespond = autoRespond.Value;
+
+            if (autoRespondButton.HasValue)
+            {
+                NextGumpConfig.AutoRespondButton = autoRespondButton.Value;
+                NextGumpConfig.AutoRespond = true;
+            }
+        });
 
         /// <summary>
         /// Check if a gump contains a specific text.
@@ -3518,9 +3599,9 @@ namespace ClassicUO.LegionScripting
         /// <param name="width"></param>
         /// <param name="height"></param>
         /// <returns></returns>
-        public ScrollArea CreateGumpScrollArea(int x, int y, int width, int height)
+        public PyScrollArea CreateGumpScrollArea(int x, int y, int width, int height)
         {
-            return new ScrollArea(x, y, width, height, true);
+            return new PyScrollArea(new ScrollArea(x, y, width, height, true));
         }
 
         /// <summary>

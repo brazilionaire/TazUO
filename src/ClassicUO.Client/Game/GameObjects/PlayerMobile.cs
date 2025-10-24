@@ -16,7 +16,7 @@ namespace ClassicUO.Game.GameObjects
     public class PlayerMobile : Mobile
     {
         private readonly Dictionary<BuffIconType, BuffIcon> _buffIcons = new Dictionary<BuffIconType, BuffIcon>();
-        
+
         public PlayerMobile(World world, uint serial) : base(world, serial)
         {
             Skills = new Skill[Client.Game.UO.FileManager.Skills.SkillsCount];
@@ -122,22 +122,25 @@ namespace ClassicUO.Game.GameObjects
         public ushort Weight;
         public ushort WeightMax;
 
-        public Item FindBandage()
+        public Item FindBandage(ushort graphic = 0x0E21)
         {
-            Item backpack = FindItemByLayer(Layer.Backpack);
+            Item backpack = Backpack;
             Item item = null;
 
             if (backpack != null)
             {
-                item = backpack.FindItem(0x0E21);
+                item = backpack.FindItem(graphic);
             }
+
+            if (item == null)
+                item = FindItemByLayer(Layer.Waist)?.FindItem(graphic);
 
             return item;
         }
 
         public Item FindItemByGraphic(ushort graphic)
         {
-            Item backpack = FindItemByLayer(Layer.Backpack);
+            Item backpack = Backpack;
 
             if (backpack != null)
             {
@@ -149,7 +152,7 @@ namespace ClassicUO.Game.GameObjects
 
         public Item FindItemByCliloc(int cliloc)
         {
-            Item backpack = FindItemByLayer(Layer.Backpack);
+            Item backpack = Backpack;
 
             if (backpack != null)
             {
@@ -275,7 +278,7 @@ namespace ClassicUO.Game.GameObjects
         public void UpdateAbilities()
         {
             AbilityData.DefaultItemAbilities.Set(Abilities);
-            
+
             if ((FindItemByLayer(Layer.OneHanded) ?? FindItemByLayer(Layer.TwoHanded)) is { OriginalGraphic: > 0 } weapon)
             {
                 ushort animId = weapon.ItemData.AnimID;

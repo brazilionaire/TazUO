@@ -491,7 +491,7 @@ internal static class GameActions
     {
         Gump g;
 
-        Item backpack = world.Player.FindItemByLayer(Layer.Backpack);
+        Item backpack = world.Player.Backpack;
 
         if (backpack == null)
         {
@@ -515,7 +515,7 @@ internal static class GameActions
 
     internal static bool OpenBackpack(World world)
     {
-        Item backpack = world.Player.FindItemByLayer(Layer.Backpack);
+        Item backpack = world.Player.Backpack;
 
         if (backpack == null)
         {
@@ -575,7 +575,7 @@ internal static class GameActions
 
             // Record action for script recording
             ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordAttack(serial);
-            ScriptingInfoGump.AddOrUpdateInfo("Last Attacked", serial);
+            ScriptingInfoGump.AddOrUpdateInfo("Last Attacked", $"0x{serial:X}");
 
         world.TargetManager.NewTargetSystemSerial = serial;
         world.TargetManager.LastAttack = serial;
@@ -589,11 +589,14 @@ internal static class GameActions
 
     internal static void DoubleClick(World world, uint serial)
     {
-            // Record action for script recording (only for items)
-            if (SerialHelper.IsItem(serial))
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordUseItem(serial);
+        // Record action for script recording (only for items)
+        if (SerialHelper.IsItem(serial))
+            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordUseItem(serial);
 
-            ScriptingInfoGump.AddOrUpdateInfo("Last Object", serial);
+        ScriptingInfoGump.AddOrUpdateInfo("Last Object", $"0x{serial:X}");
+        var obj = World.Instance.Get(serial);
+        if (obj != null)
+            ScriptingInfoGump.AddOrUpdateInfo("Last Object Graphic", $"0x{obj.Graphic:X}");
 
         if (serial != world.Player && SerialHelper.IsMobile(serial) && world.Player.InWarMode)
         {
@@ -843,8 +846,8 @@ internal static class GameActions
         Client.Game.UO.GameCursor.ItemHold.Set(item, (ushort)amount, offset);
         Client.Game.UO.GameCursor.ItemHold.IsGumpTexture = is_gump;
         Socket.Send_PickUpRequest(item, (ushort)amount);
-            ScriptingInfoGump.AddOrUpdateInfo("Last Picked Up Item", item.Serial);
-
+        ScriptingInfoGump.AddOrUpdateInfo("Last Picked Up Item", $"0x{item.Serial:X}");
+        ScriptingInfoGump.AddOrUpdateInfo("Last Object Graphic", $"0x{item.Graphic:X}");
 
         if (item.OnGround)
         {
@@ -1017,7 +1020,7 @@ internal static class GameActions
 
             // Record action for script recording
             var name = SpellDefinition.FullIndexGetSpell(index).Name;
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordCastSpell(name);
+            ScriptRecorder.Instance.RecordCastSpell(name);
             ScriptingInfoGump.AddOrUpdateInfo("Last Spell", name);
         }
     }
@@ -1033,7 +1036,7 @@ internal static class GameActions
         if (!string.IsNullOrEmpty(name) && SpellDefinition.TryGetSpellFromName(name, out var spellDef))
         {
                 // Record action for script recording
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordCastSpell(name);
+                ScriptRecorder.Instance.RecordCastSpell(name);
                 ScriptingInfoGump.AddOrUpdateInfo("Last Spell", name);
 
             CastSpell(spellDef.ID);
@@ -1251,7 +1254,7 @@ internal static class GameActions
     {
         //Socket.Send(new PPickUpRequest(serial, amount));
 
-        Item backpack = world.Player.FindItemByLayer(Layer.Backpack);
+        Item backpack = world.Player.Backpack;
 
         if (backpack == null)
         {

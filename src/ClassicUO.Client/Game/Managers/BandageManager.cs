@@ -39,11 +39,25 @@ namespace ClassicUO.Game.Managers
         public bool CheckHidden => ProfileManager.CurrentProfile?.BandageAgentCheckHidden ?? false;
         public bool CheckInvul => ProfileManager.CurrentProfile?.BandageAgentCheckInvul ?? false;
         public bool HasBandagingBuff { get; set; } = false;
+        public bool UseDexFormula => ProfileManager.CurrentProfile?.BandageAgentUseDexFormula ?? false;
+        private bool DisableSelfHeal => ProfileManager.CurrentProfile?.BandageAgentDisableSelfHeal ?? false;
 
         private BandageManager()
         {
             EventSink.OnBuffAdded += OnBuffAdded;
             EventSink.OnBuffRemoved += OnBuffRemoved;
+        }
+
+        public void SetPoisoned(uint serial, bool status)
+        {
+            if (!IsEnabled || !status) return;
+
+            Mobile mobile = World.Instance?.Mobiles?.Get(serial);
+
+            if (ShouldAttemptHeal(mobile))
+            {
+                AttemptHealMobile(mobile);
+            }
         }
 
         private void OnBuffAdded(object sender, BuffEventArgs e)
@@ -153,6 +167,10 @@ namespace ClassicUO.Game.Managers
             if (!isPlayer && !isFriend)
                 return false;
 
+            // Check if self-healing is disabled
+            if (isPlayer && DisableSelfHeal)
+                return false;
+
             // Check distance for friends (within 3 tiles)
             if (isFriend && mobile.Distance > 3)
                 return false;
@@ -222,7 +240,6 @@ namespace ClassicUO.Game.Managers
             {
                 // Use the same pattern as BandageSelf but target the mobile
                 AsyncNetClient.Socket.Send_TargetSelectedObject(bandage.Serial, mobile.Serial);
-                _nextBandageTime = Time.Ticks + (CheckForBuff ? AsyncNetClient.Socket.Statistics.Ping + 10 : HealDelayMs);
             }
             else
             {
@@ -230,8 +247,12 @@ namespace ClassicUO.Game.Managers
                 TargetManager.SetAutoTarget(mobile.Serial, TargetType.Beneficial, CursorTarget.Object);
 
                 GameActions.DoubleClick(World.Instance, bandage.Serial);
-                _nextBandageTime = Time.Ticks + (CheckForBuff ? AsyncNetClient.Socket.Statistics.Ping + 10 : HealDelayMs);
             }
+
+            if (UseDexFormula)
+                _nextBandageTime = Time.Ticks + GetDexHealingTime(mobile.Serial == World.Instance.Player);
+            else
+                _nextBandageTime = Time.Ticks + (CheckForBuff ? AsyncNetClient.Socket.Statistics.Ping + 10 : HealDelayMs);
 
             Log.Debug("Tried to heal someone");
 
@@ -244,7 +265,21 @@ namespace ClassicUO.Game.Managers
             if (World.Instance.Player?.FindItemByGraphic(BandageGraphic) is { } bandage)
                 return bandage;
 
-            return World.Instance.Player?.FindBandage();
+            return World.Instance.Player?.FindBandage(BandageGraphic);
+        }
+
+        /// <summary>
+        /// This includes your last ping to be on the safe side
+        /// </summary>
+        /// <returns></returns>
+        private int GetDexHealingTime(bool self)
+        {
+            if (!IsEnabled) return 0;
+
+            int diff = self ? World.Instance.Player.Dexterity / 20 : World.Instance.Player.Dexterity / 60;
+            int init = self ? 11 : 4;
+
+            return (int)(((init - diff) * 1000) + AsyncNetClient.Socket.Statistics.Ping + 10);
         }
 
         /// <summary>

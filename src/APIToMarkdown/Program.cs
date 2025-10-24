@@ -57,7 +57,7 @@ public static class GenDoc
         sb.AppendLine();
 
         sb.AppendLine(":::tip[API.py File]");
-        sb.AppendLine("If you download the [API.py](API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.  ");
+        sb.AppendLine("If you download the [API.py](https://github.com/PlayTazUO/TazUO/blob/dev/src/ClassicUO.Client/LegionScripting/docs/API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.  ");
         sb.AppendLine();
         sb.AppendLine("You can now type `-updateapi` in game to download the latest API.py file.");
         sb.AppendLine(":::");
@@ -467,6 +467,9 @@ public static class GenDoc
         // Trim whitespace just in case
         csharpType = csharpType.Trim();
 
+        if (csharpType == "PythonList")
+            return "list";
+
         // 1. Handle array types (e.g., int[], string[], MyClass[])
         if (csharpType.EndsWith("[]"))
         {
@@ -481,13 +484,13 @@ public static class GenDoc
         // 2. Handle common generic collection types (List<T>, IEnumerable<T>, etc.)
         // This uses basic string parsing; more robust parsing might be needed for complex cases.
         string[] collectionPrefixes = {
-        "List<", "IList<", "IEnumerable<", "ICollection<", "Collection<",
-        "System.Collections.Generic.List<",
-        "System.Collections.Generic.IList<",
-        "System.Collections.Generic.IEnumerable<",
-        "System.Collections.Generic.ICollection<",
-        "System.Collections.ObjectModel.Collection<"
-    };
+            "List<", "IList<", "IEnumerable<", "ICollection<", "Collection<",
+            "System.Collections.Generic.List<",
+            "System.Collections.Generic.IList<",
+            "System.Collections.Generic.IEnumerable<",
+            "System.Collections.Generic.ICollection<",
+            "System.Collections.ObjectModel.Collection<"
+        };
 
         // Check if the type starts with one of the prefixes and ends with ">"
         string? matchedPrefix = collectionPrefixes.FirstOrDefault(prefix => csharpType.StartsWith(prefix));
@@ -538,8 +541,8 @@ public static class GenDoc
         // Include fully qualified names if they might appear from ToString()
         return csharpType switch
         {
-            "int" or "Int32" or "System.Int32" => "int",
-            "uint" or "UInt32" or "System.UInt32" => "int", // Map unsigned to int
+            "int" or "int?" or "Int32" or "System.Int32" => "int",
+            "uint" or "uint?" or "UInt32" or "System.UInt32" => "int", // Map unsigned to int
             "short" or "Int16" or "System.Int16" => "int",
             "ushort" or "UInt16" or "System.UInt16" => "int",
             "long" or "Int64" or "System.Int64" => "int",
@@ -548,7 +551,7 @@ public static class GenDoc
             "sbyte" or "SByte" or "System.SByte" => "int",
             "string" or "String" or "System.String" => "str",
             "char" or "Char" or "System.Char" => "str", // Map C# char to Python str
-            "bool" or "Boolean" or "System.Boolean" => "bool",
+            "bool" or "bool?" or "Boolean" or "System.Boolean" => "bool",
             "double" or "Double" or "System.Double" => "float",
             "float" or "Single" or "System.Single" => "float", // C# float is System.Single
             "decimal" or "Decimal" or "System.Decimal" => "float", // Or use Python's Decimal type
@@ -574,6 +577,8 @@ public static class GenDoc
             "PyControlDropDown" => "PyControlDropDown",
             "PyBaseControl" => "PyBaseControl",
             "PyBaseGump" => "PyBaseGump",
+            "PyScrollArea" => "PyScrollArea",
+            "PythonList" => "List",
 
             // Fallback for unknown types
             _ => noMatch

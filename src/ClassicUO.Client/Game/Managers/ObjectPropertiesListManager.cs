@@ -47,16 +47,11 @@ namespace ClassicUO.Game.Managers
 
         public bool Contains(uint serial)
         {
-            if (_itemsProperties.TryGetValue(serial, out ItemProperty p))
-            {
-                if (ProfileManager.CurrentProfile.ForceTooltipsOnOldClients)
-                    ForcedTooltipManager.RequestName(_world, serial);
-
-                return true; //p.Revision != 0;  <-- revision == 0 can contain the name.
-            }
-
-            if (ProfileManager.CurrentProfile.ForceTooltipsOnOldClients)
+            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.ForceTooltipsOnOldClients)
                 ForcedTooltipManager.RequestName(_world, serial);
+
+            if (_itemsProperties.TryGetValue(serial, out ItemProperty p))
+                return true; //p.Revision != 0;  <-- revision == 0 can contain the name.
 
             // if we don't have the OPL of this item, let's request it to the server.
             // Original client seems asking for OPL when character is not running.

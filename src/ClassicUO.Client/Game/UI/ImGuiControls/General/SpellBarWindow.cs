@@ -132,15 +132,25 @@ namespace ClassicUO.Game.UI.ImGuiControls
             { ImGuiKey.Y, SDL.SDL_Keycode.SDLK_Y },
             { ImGuiKey.Z, SDL.SDL_Keycode.SDLK_Z },
             { ImGuiKey._1, SDL.SDL_Keycode.SDLK_1 },
+            { ImGuiKey._1, SDL.SDL_Keycode.SDLK_KP_1 },
             { ImGuiKey._2, SDL.SDL_Keycode.SDLK_2 },
+            { ImGuiKey._2, SDL.SDL_Keycode.SDLK_KP_2 },
             { ImGuiKey._3, SDL.SDL_Keycode.SDLK_3 },
+            { ImGuiKey._3, SDL.SDL_Keycode.SDLK_KP_3 },
             { ImGuiKey._4, SDL.SDL_Keycode.SDLK_4 },
+            { ImGuiKey._4, SDL.SDL_Keycode.SDLK_KP_4 },
             { ImGuiKey._5, SDL.SDL_Keycode.SDLK_5 },
+            { ImGuiKey._5, SDL.SDL_Keycode.SDLK_KP_5 },
             { ImGuiKey._6, SDL.SDL_Keycode.SDLK_6 },
+            { ImGuiKey._6, SDL.SDL_Keycode.SDLK_KP_6 },
             { ImGuiKey._7, SDL.SDL_Keycode.SDLK_7 },
+            { ImGuiKey._7, SDL.SDL_Keycode.SDLK_KP_7 },
             { ImGuiKey._8, SDL.SDL_Keycode.SDLK_8 },
+            { ImGuiKey._8, SDL.SDL_Keycode.SDLK_KP_8 },
             { ImGuiKey._9, SDL.SDL_Keycode.SDLK_9 },
-            { ImGuiKey._0, SDL.SDL_Keycode.SDLK_0 }
+            { ImGuiKey._9, SDL.SDL_Keycode.SDLK_KP_9 },
+            { ImGuiKey._0, SDL.SDL_Keycode.SDLK_0 },
+            { ImGuiKey._0, SDL.SDL_Keycode.SDLK_KP_0}
         };
 
         private void CaptureCurrentInput()

@@ -263,6 +263,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             entry.Graphic = newGraphic;
                         }
                     }
+                    SetTooltip("Set to -1 to match any graphic.");
 
                     ImGui.TableNextColumn();
                     // Initialize input string if not exists
@@ -283,6 +284,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             entry.Hue = newHue;
                         }
                     }
+                    SetTooltip("Set to -1 to match any hue.");
 
                     ImGui.TableNextColumn();
                     // Initialize input string if not exists

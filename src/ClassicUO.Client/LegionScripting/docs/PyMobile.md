@@ -61,6 +61,13 @@ description:  Represents a Python-accessible mobile (NPC, creature, or player ch
 
 **Type:** `bool`
 
+### `Backpack`
+
+**Type:** `PyItem`
+
+ Get the mobile's Backpack item
+
+
 ### `__class__`
 
 **Type:** `string`

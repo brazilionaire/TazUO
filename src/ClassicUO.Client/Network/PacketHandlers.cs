@@ -802,6 +802,8 @@ sealed class PacketHandlers
                         mobile.Flags &= ~Flags.Poisoned;
                     }
                 }
+
+                BandageManager.Instance.SetPoisoned(mobile.Serial, enabled);
             }
             else if (type == 2)
             {
@@ -6838,12 +6840,7 @@ sealed class PacketHandlers
             return null;
         }
 
-        Gump gump = UIManager.GetGumpServer(gumpID);
-        if (gump != null && gump.LocalSerial == sender)
-        {
-            gump.Dispose();
-            gump = null;
-        }
+        UIManager.GetGumpServer(gumpID)?.Dispose();
 
         bool mustBeAdded = true;
 
@@ -6857,21 +6854,18 @@ sealed class PacketHandlers
             UIManager.SavePosition(gumpID, new Point(x, y));
         }
 
-        if (gump == null)
+        Gump gump = new Gump(world, sender, gumpID)
         {
-            gump = new Gump(world, sender, gumpID)
-            {
-                X = x,
-                Y = y,
-                CanMove = true,
-                CanCloseWithRightClick = true,
-                CanCloseWithEsc = true,
-                InvalidateContents = false,
-                IsFromServer = true
-            };
-        }
+            X = x,
+            Y = y,
+            CanMove = true,
+            CanCloseWithRightClick = true,
+            CanCloseWithEsc = true,
+            InvalidateContents = false,
+            IsFromServer = true
+        };
 
-            gump.PacketGumpText = string.Join("\n", lines);
+        StringBuilder gumpTextBuilder = new StringBuilder(string.Join("\n", lines));
 
         int group = 0;
         int page = 0;
@@ -6887,8 +6881,8 @@ sealed class PacketHandlers
                 continue;
             }
 
-                string entry = gparams[0];
-                gump.PacketGumpText += string.Join(" ", gparams) + "\n";
+            string entry = gparams[0];
+            gumpTextBuilder.Append(string.Join(" ", gparams)).Append('\n');
 
             if (string.Equals(entry, "button", StringComparison.InvariantCultureIgnoreCase))
             {
@@ -7411,6 +7405,8 @@ sealed class PacketHandlers
             }
         }
 
+        gump.PacketGumpText = gumpTextBuilder.ToString();
+
         if (mustBeAdded)
         {
             UIManager.Add(gump);
@@ -7514,6 +7510,8 @@ sealed class PacketHandlers
             gump.CenterXInViewPort();
             gump.CenterYInViewPort();
         }
+
+        NextGumpConfig.Apply(gump);
 
         return gump;
     }

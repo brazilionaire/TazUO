@@ -14,14 +14,14 @@ All methods, properties, enums, etc need to pre prefaced with `API.` for example
 :::
 
 :::tip[API.py File]
-If you download the [API.py](API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.  
+If you download the [API.py](https://github.com/PlayTazUO/TazUO/blob/dev/src/ClassicUO.Client/LegionScripting/docs/API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.  
 
 You can now type `-updateapi` in game to download the latest API.py file.
 :::
 
 [Additional notes](../notes/)  
 
-*This was generated on `10/15/25`.*
+*This was generated on `10/21/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -1906,6 +1906,43 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### ConfigNextGump
+`(serial, x, y, isVisible, autoClose, autoRespond, autoRespondButton)`
+ Configure how the next gump should be handled.
+ Example:
+ ```py
+ # Position gump at coordinates
+ API.ConfigNextGump(x=100, y=200)
+
+ # Auto-close any gump
+ API.ConfigNextGump(autoClose=True)
+
+ # Auto-respond to specific gump
+ API.ConfigNextGump(serial=0x12345678, autoRespond=True, autoRespondButton=1)
+
+ # Clear configuration
+ API.ConfigNextGump()
+
+ Note: This is only applied once. You cannot stack multiple configs. This is reset after successfully applied and only applies to server-sent gumps.
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `serial` | `uint?` | ✅ Yes | Gump serial to match (0 = match any gump) |
+| `x` | `int?` | ✅ Yes | X position |
+| `y` | `int?` | ✅ Yes | Y position |
+| `isVisible` | `bool?` | ✅ Yes | Whether gump should be visible |
+| `autoClose` | `bool?` | ✅ Yes | Automatically close the gump |
+| `autoRespond` | `bool?` | ✅ Yes | Automatically respond to the gump |
+| `autoRespondButton` | `int?` | ✅ Yes | Button ID to use for auto-response |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### GumpContains
 `(text, ID)`
  Check if a gump contains a specific text.
@@ -2942,7 +2979,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | `width` | `int` | ❌ No |  |
 | `height` | `int` | ❌ No |  |
 
-**Return Type:** `ScrollArea`
+**Return Type:** `PyScrollArea`
 
 ---
 
