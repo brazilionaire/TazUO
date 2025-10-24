@@ -128,7 +128,7 @@ namespace ClassicUO.Game.Scenes
                     Log.TraceDebug($"[HandShake] Reconnecting...");
                     if (!string.IsNullOrEmpty(Account))
                     {
-                        Connect(Account, Crypter.Decrypt(Password), IP, Port);
+                        Connect(Account, Password, IP, Port);
                     }
 
                     if (reconnectTime < 1000)
