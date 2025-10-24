@@ -53,7 +53,7 @@ namespace ClassicUO.Game.Scenes
             Instance?.Dispose();
             _world = world;
             Instance = this;
-            _handshake = new LoginHandshake();
+            _handshake = new LoginHandshake(Settings.GlobalSettings.Reconnect);
             _handshake.LoginStepChanged += OnLoginStepChanged;
         }
 
@@ -76,11 +76,7 @@ namespace ClassicUO.Game.Scenes
             set => _handshake.Cities = value;
         }
         public string[] Characters => _handshake.Characters;
-        public string PopupMessage
-        {
-            get => _handshake.PopupMessage;
-            set => _handshake.PopupMessage = value;
-        }
+        public string PopupMessage { get; set; }
         public byte ServerIndex => _handshake.ServerIndex;
         public static string Account { get; internal set; }
         public string Password => _handshake.Password;
@@ -178,6 +174,14 @@ namespace ClassicUO.Game.Scenes
 
         private void OnLoginStepChanged(object sender, LoginSteps newStep)
         {
+            if (newStep == LoginSteps.PopUpMessage)
+            {
+                if(_handshake.ErrorPacket != byte.MaxValue)
+                    PopupMessage = ServerErrorMessages.GetError(_handshake.ErrorPacket, _handshake.ErrorCode, LoginDelay);
+                else if(!string.IsNullOrEmpty(_handshake.ErrorMessage))
+                    PopupMessage = _handshake.ErrorMessage;
+            }
+
             if (_lastLoginStep != newStep)
             {
                 Client.Game.UO.GameCursor.IsLoading = false;
@@ -189,13 +193,20 @@ namespace ClassicUO.Game.Scenes
 
                 _lastLoginStep = newStep;
             }
+
+            if (newStep == LoginSteps.LoginInToServer)
+            {
+                Settings.GlobalSettings.LastServerNum = _handshake.LastServerNum;
+                Settings.GlobalSettings.LastServerName = _handshake.LastServerName;
+                Settings.GlobalSettings.Save();
+            }
         }
 
         public override void Update()
         {
             base.Update();
 
-            _handshake.HandleReconnect();
+            _handshake.HandleReconnect(Settings.GlobalSettings.ReconnectTime);
 
             if ((CurrentLoginStep == LoginSteps.CharacterCreation || CurrentLoginStep == LoginSteps.CharacterSelection) && Time.Ticks > _pingTime)
             {
@@ -321,7 +332,22 @@ namespace ClassicUO.Game.Scenes
         public void Connect(string account, string password)
         {
             Account = account;
-            _handshake.Connect(account, password);
+            _handshake.Connect(account, password, Settings.GlobalSettings.IP, Settings.GlobalSettings.Port);
+
+            // Save credentials to config file
+            if (Settings.GlobalSettings.SaveAccount)
+            {
+                Settings.GlobalSettings.Username = account;
+                Settings.GlobalSettings.Password = Crypter.Encrypt(password);
+                try
+                {
+                    Settings.GlobalSettings.Save();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Failed to save settings: {ex}");
+                }
+            }
         }
 
         public int GetServerIndexByName(string name)
@@ -331,7 +357,20 @@ namespace ClassicUO.Game.Scenes
 
         public int GetServerIndexFromSettings()
         {
-            return _handshake.GetServerIndexFromSettings();
+            string name = Settings.GlobalSettings.LastServerName;
+            int index = GetServerIndexByName(name);
+
+            if (index == -1)
+            {
+                index = Settings.GlobalSettings.LastServerNum;
+            }
+
+            if (Servers == null || index < 0 || index >= Servers.Length)
+            {
+                index = 0;
+            }
+
+            return index;
         }
 
         public void SelectServer(byte index)
@@ -350,7 +389,8 @@ namespace ClassicUO.Game.Scenes
             {
                 LastCharacterManager.Save(Account, _world.ServerName, Characters[index]);
 
-                CurrentLoginStep = LoginSteps.EnteringBritania;
+                //CurrentLoginStep = LoginSteps.EnteringBritania;
+                _handshake.SetLoginStep(LoginSteps.EnteringBritania);
                 AsyncNetClient.Socket.Send_SelectCharacter(index, Characters[index], AsyncNetClient.Socket.LocalIP);
             }
         }
@@ -359,7 +399,7 @@ namespace ClassicUO.Game.Scenes
         {
             if (CurrentLoginStep == LoginSteps.CharacterSelection)
             {
-                CurrentLoginStep = LoginSteps.CharacterCreation;
+                _handshake.SetLoginStep(LoginSteps.CharacterCreation);
             }
         }
 
@@ -384,7 +424,7 @@ namespace ClassicUO.Game.Scenes
                                                   (uint)i,
                                                   profession);
 
-            CurrentLoginStep = LoginSteps.CharacterCreationDone;
+            _handshake.SetLoginStep(LoginSteps.CharacterCreationDone);
         }
 
         public void DeleteCharacter(uint index)
@@ -399,9 +439,9 @@ namespace ClassicUO.Game.Scenes
         {
             PopupMessage = null;
 
-            if (Characters != null && CurrentLoginStep != LoginSteps.CharacterCreation)
+            if (Characters != null && CurrentLoginStep != LoginSteps.CharacterCreation && CurrentLoginStep != LoginSteps.ServerSelection)
             {
-                CurrentLoginStep = LoginSteps.LoginInToServer;
+                _handshake.SetLoginStep(LoginSteps.LoginInToServer);
             }
 
             switch (CurrentLoginStep)
@@ -411,7 +451,6 @@ namespace ClassicUO.Game.Scenes
                 case LoginSteps.ServerSelection:
                     _handshake.Disconnect();
                     _handshake.SetLoginStep(LoginSteps.Main);
-                    //CurrentLoginStep = LoginSteps.Main;
 
                     break;
 
@@ -422,7 +461,6 @@ namespace ClassicUO.Game.Scenes
                     break;
 
                 case LoginSteps.CharacterCreation:
-                    //CurrentLoginStep = LoginSteps.CharacterSelection;
                     _handshake.SetLoginStep(LoginSteps.CharacterSelection);
 
                     break;
@@ -430,7 +468,6 @@ namespace ClassicUO.Game.Scenes
                 case LoginSteps.PopUpMessage:
                 case LoginSteps.CharacterSelection:
                     _handshake.Disconnect();
-                    //CurrentLoginStep = LoginSteps.Main;
                     _handshake.SetLoginStep(LoginSteps.Main);
 
                     break;
@@ -523,11 +560,6 @@ namespace ClassicUO.Game.Scenes
         public void HandleLoginDelayPacket(ref StackDataReader p)
         {
             _handshake.HandleLoginDelayPacket(ref p);
-        }
-
-        public void HandleRelayServerPacket(ref StackDataReader p)
-        {
-            _handshake.HandleRelayServerPacket(ref p);
         }
 
         public override void Dispose()

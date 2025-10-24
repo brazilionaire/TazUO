@@ -6231,12 +6231,14 @@ sealed class PacketHandlers
             return;
         }
 
-        LoginScene scene = Client.Game.GetScene<LoginScene>();
+        LoginHandshake.Instance?.HandleRelayServerPacket(ref p, Settings.GlobalSettings.IgnoreRelayIp);
 
-        if (scene != null)
-        {
-            scene.HandleRelayServerPacket(ref p);
-        }
+        // LoginScene scene = Client.Game.GetScene<LoginScene>();
+        //
+        // if (scene != null)
+        // {
+        //     scene.HandleRelayServerPacket(ref p);
+        // }
     }
 
     private static void UpdateCharacterList(World world, ref StackDataReader p)

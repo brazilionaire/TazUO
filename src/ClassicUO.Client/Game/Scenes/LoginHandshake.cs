@@ -1,44 +1,53 @@
 using System;
 using System.Net.Sockets;
-using ClassicUO.Configuration;
-using ClassicUO.Game.Data;
+using System.Numerics;
 using ClassicUO.IO;
 using ClassicUO.Network;
 using ClassicUO.Network.Encryption;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
-using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Game.Scenes
 {
     public class LoginHandshake : IDisposable
     {
+        public static LoginHandshake Instance;
+
         private ushort _retries;
         private int _reconnectTryCounter = 1;
         private long _reconnectTime;
         private bool _isDisposed;
 
-        public LoginHandshake()
+        public LoginHandshake(bool shouldReconnect)
         {
+            Instance = this;
+            ShouldReconnect = shouldReconnect;
         }
 
         public LoginSteps CurrentLoginStep { get; set; } = LoginSteps.Main;
         public ServerListEntry[] Servers { get; private set; }
         public CityInfo[] Cities { get; set; }
         public string[] Characters { get; private set; }
-        public string PopupMessage { get; set; }
         public byte ServerIndex { get; private set; }
         public string Account { get; private set; }
         public string Password { get; private set; }
+        public string IP { get; set; }
+        public ushort Port { get; set; }
         public (int min, int max) LoginDelay { get; private set; }
+        public bool ShouldReconnect { get; set; }
         public bool Reconnect { get; set; }
+        public ushort LastServerNum { get; private set; }
+        public string LastServerName { get; private set; }
+        public byte ErrorPacket { get; private set; } = byte.MaxValue;
+        public byte ErrorCode { get; private set; } = byte.MaxValue;
+        public string ErrorMessage { get; private set; } = string.Empty;
 
         public event EventHandler<LoginSteps> LoginStepChanged;
         public event EventHandler<SocketError> ConnectionFailed;
         public event EventHandler<string> ErrorOccurred;
 
-        public void Connect(string account, string password)
+        public void Connect(string account, string password, string ip, ushort port)
         {
             if (CurrentLoginStep == LoginSteps.Connecting)
             {
@@ -47,23 +56,10 @@ namespace ClassicUO.Game.Scenes
 
             Account = account;
             Password = password;
+            IP = ip;
+            Port = port;
 
-            // Save credentials to config file
-            if (Settings.GlobalSettings.SaveAccount)
-            {
-                Settings.GlobalSettings.Username = Account;
-                Settings.GlobalSettings.Password = Crypter.Encrypt(Password);
-                try
-                {
-                    Settings.GlobalSettings.Save();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"Failed to save settings: {ex}");
-                }
-            }
-
-            Log.Trace($"[HandShake] Start login to: {Settings.GlobalSettings.IP},{Settings.GlobalSettings.Port}");
+            Log.TraceDebug($"[HandShake] Start login to: {IP},{Port}");
 
             if (!Reconnect)
             {
@@ -76,20 +72,27 @@ namespace ClassicUO.Game.Scenes
             AsyncNetClient.Socket = new AsyncNetClient();
             AsyncNetClient.Socket.Connected += OnNetClientConnected;
             AsyncNetClient.Socket.Disconnected += OnNetClientDisconnected;
-            var status = AsyncNetClient.Socket.Connect(Settings.GlobalSettings.IP, Settings.GlobalSettings.Port);
+            var status = AsyncNetClient.Socket.Connect(ip, port);
         }
 
         public void Disconnect()
         {
-            Log.Trace("[HandShake] Disconnecting...");
+            Log.TraceDebug("[HandShake] Disconnecting...");
             AsyncNetClient.Socket.Connected -= OnNetClientConnected;
             AsyncNetClient.Socket.Disconnected -= OnNetClientDisconnected;
             AsyncNetClient.Socket?.Disconnect();
         }
 
+        private void SetError(byte packet = byte.MaxValue, byte code = byte.MaxValue, string msg = "")
+        {
+            ErrorPacket = packet;
+            ErrorCode = code;
+            ErrorMessage = msg;
+        }
+
         public void SelectServer(byte index, string serverName)
         {
-            Log.Trace($"[HandShake] Selecting server {serverName}.");
+            Log.TraceDebug($"[HandShake] Selecting server {serverName}.");
             if (CurrentLoginStep == LoginSteps.ServerSelection)
             {
                 for (byte i = 0; i < Servers.Length; i++)
@@ -101,9 +104,8 @@ namespace ClassicUO.Game.Scenes
                     }
                 }
 
-                Settings.GlobalSettings.LastServerNum = (ushort)(1 + ServerIndex);
-                Settings.GlobalSettings.LastServerName = Servers[ServerIndex].Name;
-                Settings.GlobalSettings.Save();
+                LastServerNum = (ushort)(1 + ServerIndex);
+                LastServerName = Servers[ServerIndex].Name;
 
                 SetLoginStep(LoginSteps.LoginInToServer);
 
@@ -111,31 +113,29 @@ namespace ClassicUO.Game.Scenes
             }
         }
 
-        public void HandleReconnect()
+        /// <summary>
+        /// Call in Update() of login scene
+        /// </summary>
+        /// <param name="reconnectTime">In seconds</param>
+        public void HandleReconnect(int reconnectTime)
         {
             if (Reconnect && (CurrentLoginStep == LoginSteps.PopUpMessage || CurrentLoginStep == LoginSteps.Main)
                 && !AsyncNetClient.Socket.IsConnected)
             {
                 if (_reconnectTime < Time.Ticks)
                 {
-                    Log.Trace($"[HandShake] Reconnecting...");
+                    Log.TraceDebug($"[HandShake] Reconnecting...");
                     if (!string.IsNullOrEmpty(Account))
                     {
-                        Connect(Account, Crypter.Decrypt(Settings.GlobalSettings.Password));
+                        Connect(Account, Crypter.Decrypt(Password), IP, Port);
                     }
-                    else if (!string.IsNullOrEmpty(Settings.GlobalSettings.Username))
+
+                    if (reconnectTime < 1000)
                     {
-                        Connect(Settings.GlobalSettings.Username, Crypter.Decrypt(Settings.GlobalSettings.Password));
+                        reconnectTime = 1000;
                     }
 
-                    int timeT = Settings.GlobalSettings.ReconnectTime * 1000;
-
-                    if (timeT < 1000)
-                    {
-                        timeT = 1000;
-                    }
-
-                    _reconnectTime = (long)Time.Ticks + timeT;
+                    _reconnectTime = (long)Time.Ticks + reconnectTime;
                     _reconnectTryCounter++;
                 }
             }
@@ -143,7 +143,7 @@ namespace ClassicUO.Game.Scenes
 
         public void ServerListReceived(ref StackDataReader p)
         {
-            Log.Trace($"[HandShake] Got server list.");
+            Log.TraceDebug($"[HandShake] Got server list.");
             byte flags = p.ReadUInt8();
             ushort count = p.ReadUInt16BE();
             DisposeAllServerEntries();
@@ -159,7 +159,7 @@ namespace ClassicUO.Game.Scenes
 
         public void ReceiveCharacterList(ref StackDataReader p, uint clientFeatureFlags)
         {
-            Log.Trace($"[HandShake] Got character list.");
+            Log.TraceDebug($"[HandShake] Got character list.");
             ParseCharacterList(ref p);
             ParseCities(ref p);
 
@@ -168,12 +168,12 @@ namespace ClassicUO.Game.Scenes
 
         public void UpdateCharacterList(ref StackDataReader p)
         {
-            Log.Trace($"[HandShake] Updated character list.");
+            Log.TraceDebug($"[HandShake] Updated character list.");
             ParseCharacterList(ref p);
 
             if (CurrentLoginStep != LoginSteps.PopUpMessage)
             {
-                PopupMessage = null;
+                SetError();
             }
 
             SetLoginStep(LoginSteps.CharacterSelection);
@@ -182,7 +182,7 @@ namespace ClassicUO.Game.Scenes
         public void HandleErrorCode(ref StackDataReader p)
         {
             byte code = p.ReadUInt8();
-            PopupMessage = ServerErrorMessages.GetError(p[0], code, LoginDelay);
+            SetError(p[0], code);
             SetLoginStep(LoginSteps.PopUpMessage);
             LoginDelay = default;
         }
@@ -193,18 +193,18 @@ namespace ClassicUO.Game.Scenes
             LoginDelay = ((delay - 1) * 10, delay * 10);
         }
 
-        public void HandleRelayServerPacket(ref StackDataReader p)
+        public void HandleRelayServerPacket(ref StackDataReader p, bool ignoreRelay)
         {
-            Log.Trace($"[HandShake] Got server relay packet.");
+            Log.TraceDebug($"[HandShake] Got server relay packet.");
             long ip = p.ReadUInt32LE(); // use LittleEndian here
             ushort port = p.ReadUInt16BE();
             uint seed = p.ReadUInt32BE();
 
-            if (Settings.GlobalSettings.IgnoreRelayIp || ip == 0)
+            if (ignoreRelay || ip == 0)
             {
-                Log.Trace("Ignoring relay server packet IP address");
-                ip = long.Parse(Settings.GlobalSettings.IP);
-                port = Settings.GlobalSettings.Port;
+                Log.TraceDebug("Ignoring relay server packet IP address");
+                ip = long.Parse(IP);
+                port = Port;
             }
 
             AfterRelayConnect(ip, port, seed);
@@ -226,24 +226,6 @@ namespace ClassicUO.Game.Scenes
             return -1;
         }
 
-        public int GetServerIndexFromSettings()
-        {
-            string name = Settings.GlobalSettings.LastServerName;
-            int index = GetServerIndexByName(name);
-
-            if (index == -1)
-            {
-                index = Settings.GlobalSettings.LastServerNum;
-            }
-
-            if (Servers == null || index < 0 || index >= Servers.Length)
-            {
-                index = 0;
-            }
-
-            return index;
-        }
-
         public CityInfo GetCity(int index)
         {
             if (Cities != null && index < Cities.Length)
@@ -256,7 +238,7 @@ namespace ClassicUO.Game.Scenes
 
         internal void SetLoginStep(LoginSteps step)
         {
-            Log.Trace($"[HandShake] Set login step to {step}.");
+            Log.TraceDebug($"[HandShake] Set login step to {step}.");
             CurrentLoginStep = step;
             LoginStepChanged?.Invoke(this, step);
         }
@@ -306,22 +288,21 @@ namespace ClassicUO.Game.Scenes
             Characters = null;
             DisposeAllServerEntries();
 
-            if (Settings.GlobalSettings.Reconnect)
+            if (ShouldReconnect)
             {
                 Reconnect = true;
-
-                PopupMessage = string.Format(
-                    ResGeneral.ReconnectPleaseWait01,
-                    _reconnectTryCounter,
-                    StringHelper.AddSpaceBeforeCapital(e.ToString())
-                );
+                SetError(msg: string.Format(
+                                             ResGeneral.ReconnectPleaseWait01,
+                                             _reconnectTryCounter,
+                                             StringHelper.AddSpaceBeforeCapital(e.ToString())
+                                         ));
             }
             else
             {
-                PopupMessage = string.Format(
-                    ResGeneral.ConnectionLost0,
-                    StringHelper.AddSpaceBeforeCapital(e.ToString())
-                );
+                SetError(msg: string.Format(
+                                                  ResGeneral.ConnectionLost0,
+                                                  StringHelper.AddSpaceBeforeCapital(e.ToString())
+                                              ));
             }
 
             SetLoginStep(LoginSteps.PopUpMessage);
@@ -336,7 +317,7 @@ namespace ClassicUO.Game.Scenes
             AsyncNetClient.Socket = new AsyncNetClient();
 
             _retries++;
-            Log.Trace($"[HandShake] Reconnecting to relay server...");
+            Log.TraceDebug($"[HandShake] Reconnecting to relay server...");
             AsyncNetClient.Socket.Connect(new System.Net.IPAddress(ip).ToString(), port).Wait(3000);
 
             if (AsyncNetClient.Socket.IsConnected)
@@ -356,17 +337,17 @@ namespace ClassicUO.Game.Scenes
                 }
 
                 AsyncNetClient.Socket.Send_SecondLogin(Account, Password, seed);
-                Log.Trace($"[HandShake] Sent second login.");
+                Log.TraceDebug($"[HandShake] Sent second login.");
             }
             else
             {
-                Log.Trace($"[HandShake] Failed to connect, trying again.");
+                Log.TraceDebug($"[HandShake] Failed to connect, trying again.");
                 if (_retries > 5)
                 {
                     _retries = 0;
-                    PopupMessage = "Failed to connect to game server after multiple attempts.";
+                    SetError(msg: "Failed to connect to game server after multiple attempts.");
                     SetLoginStep(LoginSteps.PopUpMessage);
-                    ErrorOccurred?.Invoke(this, PopupMessage);
+                    ErrorOccurred?.Invoke(this, ErrorMessage);
                     return;
                 }
 
@@ -393,7 +374,7 @@ namespace ClassicUO.Game.Scenes
 
             bool isNew = Client.Game.UO.Version >= ClientVersion.CV_70130;
 
-            Point[] oldtowns =
+            Vector2[] oldtowns =
             {
                 new(105, 130), new(245, 90),
                 new(165, 200), new(395, 160),
